@@ -78,40 +78,4 @@ Trạng thái sử dụng: `Chưa làm` / `Đang làm` / `Đã kiểm thử` / `
 
 Không để các chức năng mở rộng làm chậm các yêu cầu bắt buộc.
 
-## 6. Tiêu chí nghiệm thu theo giai đoạn
-
-### Mốc 1 — Kết thúc tuần 1
-- [ ] Repository và solution khởi tạo được.
-- [ ] Có tài liệu kiến trúc Client–Server và protocol.
-- [ ] Server và Client trao đổi message qua TCP.
-- [ ] Module Sudoku có test cơ bản.
-- [ ] GUI Client mẫu và kế hoạch kiểm thử đã có.
-
-### Mốc 2 — Kết thúc tuần 2
-- [ ] Hai Client chơi được một trận từ đầu đến cuối.
-- [ ] Server xác thực nước đi, quản lý thời gian và kết quả.
-- [ ] Có thông báo lỗi cơ bản và xử lý ngắt kết nối.
-- [ ] Có bản MVP chạy được để demo.
-
-### Mốc 3 — Kết thúc tuần 3
-- [ ] Lịch sử lưu và đọc lại được.
-- [ ] Khán giả chỉ xem, không sửa trạng thái.
-- [ ] Khán giả vào giữa trận nhận trạng thái hiện tại.
-- [ ] Nhiều trận hoạt động độc lập.
-- [ ] Có kết quả test dữ liệu lỗi, stress và performance ở ít nhất hai mức tải.
-
-### Mốc 4 — Trước khi nộp
-- [ ] Các yêu cầu bắt buộc được kiểm tra bằng bằng chứng.
-- [ ] README và báo cáo khớp với phiên bản code cuối.
-- [ ] Video demo có âm thanh hoặc chú thích phù hợp.
-- [ ] Repository rõ ràng và có commit của từng thành viên.
-- [ ] Không ghi số liệu kiểm thử chưa đo.
-
-## 7. Cách cập nhật checklist
-
-Với mỗi dòng:
-1. Cập nhật trạng thái: Chưa làm / Đang làm / Đã kiểm thử / Đạt / Chưa đạt.
-2. Gắn link commit/PR hoặc ảnh, log, video, báo cáo test.
-3. Ghi lỗi còn tồn tại, người xử lý và ngày dự kiến hoàn thành.
-
 **Nguyên tắc nghiệm thu:** Có code chưa đồng nghĩa đã đạt; phải chạy thử và có bằng chứng. Các mục “cần chốt” phải được nhóm quyết định trước khi triển khai sâu.
