@@ -8,13 +8,16 @@
 
 ## 2. Các điểm cần thống nhất
 * **Thời gian mỗi trận:** 10 phút mỗi trận.
-* **Cách tính điểm:** Tính theo ô đúng (Mỗi ô điền đúng được cộng điểm; ô sai không được cộng. Hết giờ, người có nhiều ô đúng hơn thắng).
+* **Cách tính điểm:** Tính theo ô đúng (Mỗi ô điền đúng được cộng 1 điểm; ô đánh bị sai -1 điểm. Hết giờ, người có nhiều ô đúng hơn thắng).
 * **Điều kiện thắng, thua, hòa:** 
   * Người hoàn thành bảng hợp lệ trước sẽ **thắng**.
-  * Nếu hết giờ mà chưa ai hoàn thành, người có số ô đúng nhiều hơn sẽ **thắng**.
-  * Nếu số ô đúng bằng nhau, kết quả **hòa**.
+  * Nếu hết giờ mà chưa ai hoàn thành, người có số điểm cao hơn sẽ **thắng**.
+  * Nếu số điểm bằng nhau, kết quả **hòa**.
   * Nếu một người chủ động bỏ cuộc, người còn lại **thắng**.
-* **Xử lý khi người chơi mất kết nối:** Xử thua ngay (Người mất kết nối bị xử thua, người còn lại thắng).
+* **Xử lý khi người chơi mất kết nối:** khi server phát hiện có người chơi bị mất kết nối
+  * server sẽ tạm dừng trận đấu trong 1 phút
+  * trong vòng 1 phút nếu chưa quay lại -> xử thua
+  * nếu quay lại trong khoảng thời gian đó -> tiếp tục trận đấu
 
 ## 3. Tổng quan luật
 
@@ -24,7 +27,7 @@
 | **Tiến độ** | Mỗi người có bảng riêng, không ảnh hưởng bảng của đối thủ |
 | **Kiểm tra nước đi** | Server xác thực dữ liệu và kiểm tra đáp án; Client không tự quyết định kết quả |
 | **Ô đề bài** | Không được sửa các ô có sẵn |
-| **Nước đi sai** | Không ghi nhận vào bảng; có thể thông báo cho người chơi |
+| **Nước đi sai** | Không ghi nhận vào bảng; có thể thông báo cho người chơi "-1 điểm ô sai" |
 | **Khán giả** | Chỉ xem tiến độ, điểm và thời gian; không gửi nước đi |
 | **Hết giờ** | Server khóa nước đi và công bố kết quả |
 | **Nhiều trận** | Mỗi trận có mã riêng, dữ liệu người chơi được tách biệt |
