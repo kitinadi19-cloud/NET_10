@@ -1,0 +1,55 @@
+using System;
+using System.Text.Json.Serialization;
+
+namespace SudokuServer
+{
+    /// <summary>Kết quả trận đấu (theo Game_Rules.md).</summary>
+    public enum MatchResult
+    {
+        Player1Win,
+        Player2Win,
+        Draw
+    }
+
+    /// <summary>Lý do trận kết thúc.</summary>
+    public enum EndReason
+    {
+        Completed,   // Một người hoàn thành bảng hợp lệ trước
+        TimeUp,      // Hết 10 phút, so sánh số ô đúng
+        Surrender,   // Một người chủ động bỏ cuộc
+        Disconnect   // Một người mất kết nối -> xử thua ngay
+    }
+
+    /// <summary>
+    /// Bản ghi lịch sử của MỘT trận đã kết thúc. Là record bất biến (init-only)
+    /// nên sau khi lưu không ai sửa được dữ liệu lịch sử từ bên ngoài.
+    /// </summary>
+    public sealed record MatchRecord
+    {
+        public string MatchId { get; init; } = string.Empty;
+        public string Player1Name { get; init; } = string.Empty;
+        public string Player2Name { get; init; } = string.Empty;
+        public DateTime StartTimeUtc { get; init; }
+        public DateTime EndTimeUtc { get; init; }
+        public int Player1CorrectCells { get; init; }
+        public int Player2CorrectCells { get; init; }
+        public MatchResult Result { get; init; }
+        public EndReason EndReason { get; init; }
+
+        // Thuộc tính suy ra không ghi vào file để tránh dữ liệu mâu thuẫn
+        [JsonIgnore]
+        public string? WinnerName => Result switch
+        {
+            MatchResult.Player1Win => Player1Name,
+            MatchResult.Player2Win => Player2Name,
+            _ => null
+        };
+
+        [JsonIgnore]
+        public double DurationSeconds => (EndTimeUtc - StartTimeUtc).TotalSeconds;
+
+        /// <summary>Tạo mã trận duy nhất, ví dụ "M-3F9A1C2B".</summary>
+        public static string NewMatchId() =>
+            "M-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+    }
+}
