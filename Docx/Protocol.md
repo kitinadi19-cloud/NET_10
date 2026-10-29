@@ -64,7 +64,7 @@ Cấu trúc chi tiết của `Payload` và `Data` phải được thống nhất
 - **Nước đi:** Server xác thực nước đi. Nếu không hợp lệ, không ghi nhận và gửi lỗi; nếu hợp lệ, cập nhật trạng thái và gửi thông tin đồng bộ.
 - **Đồng bộ:** Server là nơi quản lý trạng thái bàn cờ chính thức.
 - **Khán giả:** Chỉ được xem trận đấu, không được gửi nước đi.
-- **Ngắt kết nối:** Người chơi ngắt kết nối trong trận bị xử thua ngay.
+- **Ngắt kết nối:**  khi server phát hiện có người chơi bị mất kết nối, server sẽ tạm dừng trận đấu trong 1 phút
 - **Thắng/thua:** Người hoàn thành bàn Sudoku hợp lệ trước sẽ thắng. Hết 10 phút, so sánh số ô điền đúng; bằng nhau thì hòa.
 - **Lỗi:** Server cần xử lý JSON sai, yêu cầu không hợp lệ và message không được hỗ trợ.
 
