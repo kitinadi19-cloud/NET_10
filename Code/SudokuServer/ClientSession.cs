@@ -8,7 +8,7 @@ namespace SudokuServer
     public class ClientSession
     {
         public TcpClient TcpClient { get; }
-        public NetworkStream Stream { get; }
+        public NetworkStream Stream { get; } 
         private byte[] _buffer = new byte[2048];
         private StringBuilder _stringBuilder = new StringBuilder();
         private GameServer _server;
