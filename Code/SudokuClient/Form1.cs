@@ -1,4 +1,6 @@
-
+using SudokuClient.Core;
+using SudokuShared.Messages;
+using System.Threading.Tasks;
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -7,6 +9,7 @@ namespace SudokuClient;
 
 public partial class Form1 : Form
 {
+    private readonly NetworkClient networkClient = new();
     private readonly TextBox[,] cells = new TextBox[9, 9];
     private readonly bool[,] fixedCells = new bool[9, 9];
 
@@ -156,11 +159,10 @@ public partial class Form1 : Form
         port.SetBounds(220, 25, 90, 27);
 
         var connectButton = MakeButton(
-            "Kết nối", 335, 21, 110, 34,
-            () => status.Text =
-                $"Chưa kết nối Server ({ip.Text}:{port.Value})");
+         "Kết nối", 335, 21, 110, 34,
+         async () => await ConnectToServerAsync());
 
-        connection.Controls.AddRange(new Control[]
+         connection.Controls.AddRange(new Control[]
         {
             MakeLabel("IP SERVER", 20, 3, 150, 20, 8, true),
             ip,
@@ -391,10 +393,79 @@ public partial class Form1 : Form
         clock.Text = $"{seconds / 60:00}:{seconds % 60:00}";
     }
 
+    private async Task ConnectToServerAsync()
+{
+    try
+    {
+        status.Text = "Đang kết nối Server...";
+
+        await networkClient.ConnectAsync(
+            ip.Text.Trim(),
+            (int)port.Value);
+
+        status.Text = "Kết nối thành công! Đang tìm đối thủ...";
+
+        networkClient.MessageReceived -= OnServerMessage;
+        networkClient.MessageReceived += OnServerMessage;
+
+        networkClient.ConnectionClosed -= OnConnectionClosed;
+        networkClient.ConnectionClosed += OnConnectionClosed;
+
+        await networkClient.SendAsync(MessageTypes.JoinQueue);
+    }
+    catch (Exception ex)
+    {
+        status.Text = "Kết nối thất bại: " + ex.Message;
+    }
+}
+
+private void OnServerMessage(ResponseMessage response)
+{
+    if (IsDisposed || !IsHandleCreated)
+        return;
+
+    BeginInvoke(new Action(() =>
+    {
+        switch (response.Status)
+        {
+            case "WAITING":
+                status.Text = "Đang chờ người chơi khác...";
+                break;
+
+            case "MATCH_FOUND":
+                status.Text = "Đã tìm thấy đối thủ!";
+                StartMatch("Đối thủ");
+                break;
+
+            case "ERROR":
+                status.Text = "Lỗi Server: " + response.Message;
+                break;
+
+            default:
+                status.Text = response.Message;
+                break;
+        }
+    }));
+}
+
+private void OnConnectionClosed(string message)
+{
+    if (IsDisposed || !IsHandleCreated)
+        return;
+
+    BeginInvoke(new Action(() =>
+    {
+        timer.Stop();
+        matchStarted = false;
+        status.Text = "Mất kết nối Server: " + message;
+    }));
+}
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         timer.Stop();
         timer.Dispose();
+        networkClient.Dispose();
+        
         base.OnFormClosed(e);
     }
 }
