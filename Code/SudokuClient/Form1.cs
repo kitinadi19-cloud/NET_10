@@ -9,222 +9,309 @@ public partial class Form1 : Form
 {
     private readonly TextBox[,] cells = new TextBox[9, 9];
     private readonly bool[,] fixedCells = new bool[9, 9];
-    private readonly Label status = new();
-    private readonly Label clock = new();
+
     private readonly TextBox ip = new();
     private readonly NumericUpDown port = new();
+
+    private readonly Label clock = new();
+    private readonly Label status = new();
+    private readonly Label playerScore = new();
+    private readonly Label opponentScore = new();
+    private readonly Label opponentName = new();
+
     private readonly System.Windows.Forms.Timer timer = new();
 
-    private int selectedRow = -1, selectedCol = -1, seconds = 600;
+    private int selectedRow = -1;
+    private int selectedCol = -1;
+    private int seconds = 600;
+
+    private int myScore = 0;
+    private int enemyScore = 0;
+
+    private bool matchStarted = false;
 
     private readonly int[,] puzzle =
     {
-        {5,3,0,0,7,0,0,0,0}, {6,0,0,1,9,5,0,0,0},
-        {0,9,8,0,0,0,0,6,0}, {8,0,0,0,6,0,0,0,3},
-        {4,0,0,8,0,3,0,0,1}, {7,0,0,0,2,0,0,0,6},
-        {0,6,0,0,0,0,2,8,0}, {0,0,0,4,1,9,0,0,5},
-        {0,0,0,0,8,0,0,7,9}
+        {0,1,2,0,0,0,3,4,0},
+        {4,0,0,5,0,0,0,0,2},
+        {0,0,6,0,2,3,0,1,0},
+        {7,0,0,0,4,0,0,0,0},
+        {5,0,8,0,0,0,2,0,9},
+        {0,0,0,0,8,0,0,0,6},
+        {0,8,0,2,1,0,5,0,0},
+        {1,0,0,0,0,6,0,0,3},
+        {0,9,5,0,0,0,7,2,0}
     };
 
     public Form1()
     {
         InitializeComponent();
-        Text = "Sudoku Battle - Client";
+
+        Text = "Sudoku Battle";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1050, 760);
-        BackColor = Color.FromArgb(242, 245, 249);
+        ClientSize = new Size(1100, 800);
+        MinimumSize = new Size(1000, 750);
+        BackColor = Color.White;
         Font = new Font("Segoe UI", 10);
 
         BuildInterface();
         LoadPuzzle();
-        UpdateClock();
 
         timer.Interval = 1000;
         timer.Tick += (_, _) =>
         {
             if (seconds > 0)
+            {
                 seconds--;
+                UpdateClock();
+            }
             else
             {
                 timer.Stop();
-                status.Text = "Đã hết thời gian (demo).";
+                status.Text = "Trận đấu đã hết thời gian.";
+                matchStarted = false;
             }
-            UpdateClock();
         };
+
+        UpdateClock();
+        UpdateScores();
     }
 
-    private Label MakeLabel(string text, int x, int y, int width = 0,
-                            int size = 10, bool bold = false)
+    private Label MakeLabel(
+        string text, int x, int y, int width = 0,
+        int height = 30, int size = 10, bool bold = false)
     {
         return new Label
         {
             Text = text,
             Location = new Point(x, y),
+            Size = new Size(width == 0 ? 300 : width, height),
             AutoSize = width == 0,
-            Size = new Size(width, 60),
-            Font = new Font("Segoe UI", size,
-                bold ? FontStyle.Bold : FontStyle.Regular)
+            Font = new Font(
+                "Segoe UI", size,
+                bold ? FontStyle.Bold : FontStyle.Regular),
+            ForeColor = Color.FromArgb(30, 41, 59)
         };
     }
 
-    private Button MakeButton(string text, int x, int y, int w, int h,
-                              Action action)
+    private Button MakeButton(
+        string text, int x, int y, int width, int height,
+        Action action)
     {
         var button = new Button
         {
             Text = text,
             Location = new Point(x, y),
-            Size = new Size(w, h),
-            Font = new Font("Segoe UI", 11),
+            Size = new Size(width, height),
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(226, 232, 240)
+            BackColor = Color.FromArgb(30, 64, 175),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Cursor = Cursors.Hand
         };
+
+        button.FlatAppearance.BorderSize = 0;
         button.Click += (_, _) => action();
+
         return button;
     }
 
     private void BuildInterface()
     {
+        // HEADER
         var header = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 90,
-            BackColor = Color.FromArgb(30, 41, 59)
+            Location = new Point(0, 0),
+            Size = new Size(1100, 95),
+            BackColor = Color.White
         };
-        var title = MakeLabel("SUDOKU BATTLE", 25, 12, size: 22, bold: true);
-        title.ForeColor = Color.White;
-        var subtitle = MakeLabel("Đối kháng qua mạng • Giao diện thử nghiệm",
-            25, 55);
-        subtitle.ForeColor = Color.LightGray;
-        header.Controls.AddRange(new Control[] { title, subtitle });
+
+        var title = MakeLabel(
+            "SUDOKU BATTLE", 30, 10, 400, 40, 20, true);
+
+        var subtitle = MakeLabel(
+            "ĐỐI KHÁNG SUDOKU TRỰC TUYẾN",
+            32, 57, 500, 25, 10);
+
+        subtitle.ForeColor = Color.Gray;
+
+        header.Controls.Add(title);
+        header.Controls.Add(subtitle);
         Controls.Add(header);
 
+        // CONNECTION
         var connection = new Panel
         {
-            Location = new Point(24, 110),
-            Size = new Size(1000, 75),
-            BackColor = Color.White
+            Location = new Point(30, 110),
+            Size = new Size(1020, 65),
+            BackColor = Color.FromArgb(248, 250, 252)
         };
 
         ip.Text = "127.0.0.1";
-        ip.SetBounds(16, 28, 180, 28);
-        port.SetBounds(220, 28, 90, 28);
+        ip.SetBounds(20, 25, 180, 27);
+
         port.Minimum = 1;
         port.Maximum = 65535;
         port.Value = 8888;
+        port.SetBounds(220, 25, 90, 27);
 
-        var connect = MakeButton("Kết nối", 350, 25, 120, 35,
-            () => status.Text = $"Demo: chưa kết nối {ip.Text}:{port.Value}");
-        connect.BackColor = Color.RoyalBlue;
-        connect.ForeColor = Color.White;
+        var connectButton = MakeButton(
+            "Kết nối", 335, 21, 110, 34,
+            () => status.Text =
+                $"Chưa kết nối Server ({ip.Text}:{port.Value})");
 
         connection.Controls.AddRange(new Control[]
         {
-            MakeLabel("IP Server", 16, 5), ip,
-            MakeLabel("Port", 220, 5), port, connect
+            MakeLabel("IP SERVER", 20, 3, 150, 20, 8, true),
+            ip,
+            MakeLabel("PORT", 220, 3, 80, 20, 8, true),
+            port,
+            connectButton
         });
+
         Controls.Add(connection);
 
-        var game = new Panel
+        // PLAYER INFORMATION
+        var playerPanel = new Panel
         {
-            Location = new Point(24, 205),
-            Size = new Size(620, 510),
+            Location = new Point(30, 195),
+            Size = new Size(1020, 95),
             BackColor = Color.White
         };
 
-        var board = new TableLayoutPanel
+        var myPanel = new Panel
         {
-            Location = new Point(17, 17),
-            Size = new Size(450, 450),
-            RowCount = 9,
-            ColumnCount = 9,
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
+            Location = new Point(0, 0),
+            Size = new Size(300, 85),
+            BackColor = Color.FromArgb(240, 253, 244)
         };
 
-        for (int i = 0; i < 9; i++)
+        myPanel.Controls.Add(MakeLabel(
+            "BẠN", 15, 10, 200, 22, 10, true));
+
+        playerScore.SetBounds(15, 38, 250, 35);
+        playerScore.Font = new Font("Segoe UI", 17, FontStyle.Bold);
+        playerScore.ForeColor = Color.FromArgb(22, 163, 74);
+        myPanel.Controls.Add(playerScore);
+
+        var enemyPanel = new Panel
         {
-            board.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / 9));
-            board.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 9));
-        }
+            Location = new Point(720, 0),
+            Size = new Size(300, 85),
+            BackColor = Color.FromArgb(239, 246, 255)
+        };
+
+        opponentName.SetBounds(15, 10, 250, 22);
+        opponentName.Text = "ĐỐI THỦ: CHƯA TÌM THẤY";
+        opponentName.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        enemyPanel.Controls.Add(opponentName);
+
+        opponentScore.SetBounds(15, 38, 250, 35);
+        opponentScore.Font = new Font("Segoe UI", 17, FontStyle.Bold);
+        opponentScore.ForeColor = Color.FromArgb(37, 99, 235);
+        enemyPanel.Controls.Add(opponentScore);
+
+        // TIMER
+        var timerPanel = new Panel
+        {
+            Location = new Point(380, 0),
+            Size = new Size(260, 85),
+            BackColor = Color.FromArgb(248, 250, 252)
+        };
+
+        timerPanel.Controls.Add(MakeLabel(
+            "THỜI GIAN CÒN LẠI",
+            0, 7, 260, 20, 9, true));
+
+        clock.SetBounds(0, 25, 260, 55);
+        clock.TextAlign = ContentAlignment.MiddleCenter;
+        clock.Font = new Font("Segoe UI", 27, FontStyle.Bold);
+        clock.ForeColor = Color.FromArgb(30, 41, 59);
+        timerPanel.Controls.Add(clock);
+
+        playerPanel.Controls.Add(myPanel);
+        playerPanel.Controls.Add(enemyPanel);
+        playerPanel.Controls.Add(timerPanel);
+
+        Controls.Add(playerPanel);
+
+        // SUDOKU BOARD
+        var board = new Panel
+        {
+           Size = new Size(540, 540),
+           BackColor = Color.White,
+           Anchor = AnchorStyles.None
+        };
+
+        board.Location = new Point(
+              (ClientSize.Width - board.Width) / 2,
+               300
+        );
+
+        board.Paint += DrawBoardLines;
+
+        int cellSize = 60;
 
         for (int r = 0; r < 9; r++)
         for (int c = 0; c < 9; c++)
         {
             var cell = new TextBox
             {
-                Dock = DockStyle.Fill,
-                TextAlign = HorizontalAlignment.Center,
-                MaxLength = 1,
+                Location = new Point(
+                    c * cellSize + 2,
+                    r * cellSize + 2),
+                Size = new Size(cellSize - 4, cellSize - 4),
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 16, FontStyle.Bold),
-                Margin = Padding.Empty,
-                Tag = new Point(r, c)
+                TextAlign = HorizontalAlignment.Center,
+                Font = new Font("Segoe UI", 25, FontStyle.Regular),
+                MaxLength = 1,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(30, 41, 59)
             };
 
-            int row = r, col = c;
+            int row = r;
+            int col = c;
+
             cell.Enter += (_, _) => SelectCell(row, col);
+
             cell.KeyPress += (_, e) =>
             {
                 if (!char.IsControl(e.KeyChar) &&
                     (e.KeyChar < '1' || e.KeyChar > '9'))
+                {
                     e.Handled = true;
+                }
             };
 
             cells[r, c] = cell;
-            board.Controls.Add(cell, c, r);
+            board.Controls.Add(cell);
         }
 
-        game.Controls.Add(board);
-        game.Controls.Add(MakeLabel(
-            "Chọn ô trống rồi nhập số từ 1 đến 9.", 20, 475));
-        Controls.Add(game);
+        Controls.Add(board);
 
-        var info = new Panel
+        // STATUS
+        status.SetBounds(30, 850, 1020, 30);
+        status.Text = "Đang chờ kết nối và ghép trận...";
+        status.ForeColor = Color.Gray;
+        Controls.Add(status);
+    }
+
+    private void DrawBoardLines(object? sender, PaintEventArgs e)
+    {
+        using var thinPen = new Pen(Color.LightGray, 1);
+        using var thickPen = new Pen(Color.Black, 2);
+
+        for (int i = 0; i <= 9; i++)
         {
-            Location = new Point(665, 205),
-            Size = new Size(359, 510),
-            BackColor = Color.White
-        };
+            Pen pen = i % 3 == 0 ? thickPen : thinPen;
+            int position = i * 60;
 
-        info.Controls.Add(MakeLabel("THÔNG TIN TRẬN ĐẤU",
-            20, 20, size: 13, bold: true));
+            e.Graphics.DrawLine(
+                pen, position, 0, position, 540);
 
-        clock.SetBounds(20, 60, 300, 55);
-        clock.Font = new Font("Segoe UI", 25, FontStyle.Bold);
-        clock.ForeColor = Color.RoyalBlue;
-        info.Controls.Add(clock);
-
-        info.Controls.Add(MakeLabel("Đối thủ: Chưa tìm thấy", 20, 120));
-
-        status.Text = "Trạng thái: Chưa kết nối";
-        status.SetBounds(20, 155, 320, 65);
-        info.Controls.Add(status);
-
-        info.Controls.Add(MakeLabel("NHẬP SỐ", 20, 245,
-            size: 13, bold: true));
-
-        for (int n = 1; n <= 9; n++)
-        {
-            int number = n;
-            int x = 20 + ((n - 1) % 5) * 58;
-            int y = 285 + ((n - 1) / 5) * 48;
-            info.Controls.Add(MakeButton(number.ToString(), x, y, 48, 40,
-                () => EnterNumber(number)));
+            e.Graphics.DrawLine(
+                pen, 0, position, 540, position);
         }
-
-        info.Controls.Add(MakeButton("Xóa ô", 20, 390, 115, 36,
-            () => EnterNumber(0)));
-
-        info.Controls.Add(MakeButton("Chạy đồng hồ demo", 20, 445, 200, 36,
-            () =>
-            {
-                seconds = 600;
-                UpdateClock();
-                timer.Start();
-                status.Text = "Trạng thái: Đang chạy demo";
-            }));
-
-        Controls.Add(info);
     }
 
     private void LoadPuzzle()
@@ -233,12 +320,17 @@ public partial class Form1 : Form
         for (int c = 0; c < 9; c++)
         {
             int value = puzzle[r, c];
+
             fixedCells[r, c] = value != 0;
-            cells[r, c].Text = value == 0 ? "" : value.ToString();
+
+            cells[r, c].Text =
+                value == 0 ? "" : value.ToString();
+
             cells[r, c].ReadOnly = fixedCells[r, c];
-            cells[r, c].BackColor = fixedCells[r, c]
-                ? Color.FromArgb(226, 232, 240) : Color.White;
-            cells[r, c].ForeColor = Color.FromArgb(30, 41, 59);
+
+            cells[r, c].ForeColor = fixedCells[r, c]
+            ? Color.Black
+            : Color.FromArgb(37, 99, 235);
         }
     }
 
@@ -246,42 +338,62 @@ public partial class Form1 : Form
     {
         selectedRow = r;
         selectedCol = c;
-
-        for (int i = 0; i < 9; i++)
-        for (int j = 0; j < 9; j++)
-            cells[i, j].BackColor = fixedCells[i, j]
-                ? Color.FromArgb(226, 232, 240) : Color.White;
-
-        if (!fixedCells[r, c])
-            cells[r, c].BackColor = Color.FromArgb(219, 234, 254);
     }
 
-    private void EnterNumber(int number)
+    // Gọi khi Server thông báo trận đấu bắt đầu.
+    public void StartMatch(string name)
     {
-        if (selectedRow < 0)
+        if (InvokeRequired)
         {
-            status.Text = "Hãy chọn một ô trước.";
+            Invoke(new Action(() => StartMatch(name)));
             return;
         }
 
-        if (fixedCells[selectedRow, selectedCol])
+        seconds = 600;
+        myScore = 0;
+        enemyScore = 0;
+
+        matchStarted = true;
+
+        opponentName.Text = $"ĐỐI THỦ: {name}";
+        status.Text = "Trận đấu đang diễn ra.";
+
+        UpdateScores();
+        UpdateClock();
+
+        timer.Start();
+    }
+
+    // Gọi khi Server gửi điểm số mới.
+    public void UpdateMatchScores(int myNewScore, int enemyNewScore)
+    {
+        if (InvokeRequired)
         {
-            status.Text = "Không thể sửa ô đề bài.";
+            Invoke(new Action(() =>
+                UpdateMatchScores(myNewScore, enemyNewScore)));
             return;
         }
 
-        cells[selectedRow, selectedCol].Text =
-            number == 0 ? "" : number.ToString();
-        status.Text = number == 0 ? "Đã xóa ô." : $"Đã nhập số {number} (demo).";
+        myScore = myNewScore;
+        enemyScore = enemyNewScore;
+
+        UpdateScores();
+    }
+
+    private void UpdateScores()
+    {
+        playerScore.Text = $"{myScore} ĐIỂM";
+        opponentScore.Text = $"{enemyScore} ĐIỂM";
     }
 
     private void UpdateClock()
     {
-        clock.Text = $"⏱ {seconds / 60:00}:{seconds % 60:00}";
+        clock.Text = $"{seconds / 60:00}:{seconds % 60:00}";
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        timer.Stop();
         timer.Dispose();
         base.OnFormClosed(e);
     }
