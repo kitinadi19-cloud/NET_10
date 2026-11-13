@@ -1,4 +1,4 @@
-﻿using SudokuServer;
+using SudokuServer;
 using SudokuShared.Messages;
 
 // Cấu hình cổng: tham số dòng lệnh > biến môi trường SUDOKU_PORT > 8888
