@@ -26,20 +26,12 @@ public sealed class ClientSession
 
     public ClientSession(TcpClient tcp, GameServer server)
     {
-<<<<<<< HEAD
-        public TcpClient TcpClient { get; }
-        public NetworkStream Stream { get; } 
-        private byte[] _buffer = new byte[2048];
-        private StringBuilder _stringBuilder = new StringBuilder();
-        private GameServer _server;
-=======
         _tcp = tcp;
-        _tcp.NoDelay = true;
-        _stream = tcp.GetStream();
         _server = server;
+        _tcp.NoDelay = true;
         Endpoint = tcp.Client.RemoteEndPoint?.ToString() ?? "?";
+        _stream = tcp.GetStream();
     }
->>>>>>> 53348cf (chinh sua sever)
 
     public void StartReceiving()
     {

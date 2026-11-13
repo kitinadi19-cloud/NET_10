@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+<<<<<<< HEAD
 
   <ItemGroup>
     <ProjectReference Include="..\SudokuShared\SudokuShared.csproj" />
   </ItemGroup>
+=======
+>>>>>>> main
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,4 +19,8 @@
     <ProjectReference Include="..\SudokuLogic\SudokuLogic.csproj" />
   </ItemGroup>
 
+<<<<<<< HEAD
 </Project>
+=======
+</Project>
+>>>>>>> main
