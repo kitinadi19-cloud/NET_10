@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="SudokuShared/SudokuShared.csproj" />
+  <Project Path="SudokuLogic/SudokuLogic.csproj" />
+  <Project Path="SudokuServer/SudokuServer.csproj" />
+  <Project Path="SudokuClient/SudokuClient.csproj" />
+  <Project Path="SudokuTests/SudokuTests.csproj" />
+</Solution>
