@@ -34,7 +34,7 @@ Xây dựng trò chơi Sudoku đối kháng giữa hai người chơi thông qua
 *Vai trò dự kiến, có thể điều chỉnh theo phân công thực tế của nhóm.*
 
 ## 5. Cấu trúc
-
+``` text
 NET_10/
 ├── Code/
 │   ├── SudokuClient/  --Message, DTO, hằng số giao thức, `JsonHelper`
@@ -48,6 +48,7 @@ NET_10/
 ├── PPTX/   --chứa file thuyết trình
 ├── .gitignore
 └── README.md  --Mô tả đề tài nhóm và hướng dẫn demo
+```
 
 ## 6. Chạy
 ```bash
