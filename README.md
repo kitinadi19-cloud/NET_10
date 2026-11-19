@@ -32,3 +32,29 @@ Xây dựng trò chơi Sudoku đối kháng giữa hai người chơi thông qua
 | 6 | Hoàng Thành Đạt | Kiểm thử và tài liệu |
 
 *Vai trò dự kiến, có thể điều chỉnh theo phân công thực tế của nhóm.*
+
+## 5. Cấu trúc
+
+NET_10/
+├── Code/
+│   ├── SudokuClient/  --Message, DTO, hằng số giao thức, `JsonHelper`
+│   ├── SudokuLogic/   --Sinh đề (nghiệm duy nhất), kiểm tra nước đi, tính điểm (`PlayerBoard`)
+│   ├── SudokuServer/  --Console server: ghép trận, thách đấu, trận đấu, đồng hồ, khán giả, ngắt/kết nối lại, log, lịch sử
+│   ├── SudokuShared/  --GUI WinForms: sảnh, màn chơi, màn khán giả, tự kết nối lại
+│   ├── SudokuTests/   --xUnit: logic, luật trận, test mạng (có test lỗi/ngắt kết nối và stress 20 trận)
+│   └── SudokuUDM17.slnx
+├── Docx/   --file báo cáo
+├── Extra/  --một số luật
+├── PPTX/   --chứa file thuyết trình
+├── .gitignore
+└── README.md  --Mô tả đề tài nhóm và hướng dẫn demo
+
+## 6. Chạy
+```bash
+dotnet build SudokuUDM17.slnx
+dotnet run --project SudokuServer            # cổng 8888, hoặc: dotnet run --project SudokuServer -- 9000
+dotnet run --project SudokuClient            # mở 2 client để chơi, client thứ 3 để xem
+dotnet test                                  # chạy toàn bộ kiểm thử
+```
+Chạy trên nhiều máy: nhập IP máy server vào ô "Server IP" của Client (mở firewall cổng 8888).
+
