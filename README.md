@@ -27,8 +27,8 @@ Xây dựng trò chơi Sudoku đối kháng giữa hai người chơi thông qua
 | 1 | Nguyễn Chánh Tư Duy | Nhóm trưởng, quản lý dự án |
 | 2 | Nguyễn Thành Đạt | Server và giao tiếp mạng |
 | 3 | Phan Trần Quang Lâm | Logic Sudoku |
-| 4 | Nguyễn Anh Khôi | Giao diện Client |
-| 5 | Nguyễn Chí Hiến | Lưu trữ dữ liệu, lịch sử và khán giả |
+| 4 | Nguyễn Chí Hiến | Lưu trữ dữ liệu, lịch sử và khán giả |
+| 5 | Nguyễn Anh Khôi | Giao diện Client|
 | 6 | Hoàng Thành Đạt | Kiểm thử và tài liệu |
 
 *Vai trò dự kiến, có thể điều chỉnh theo phân công thực tế của nhóm.*
