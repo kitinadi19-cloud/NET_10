@@ -32,12 +32,12 @@ internal sealed class TestClient : IDisposable
         }
     }
 
-    public static async Task<TestClient> LoginAsync(int port, string name)
+    public static async Task<TestClient> LoginAsync(int port, string name, int seconds = 15)
     {
         var c = await ConnectAsync(port);
         c.Name = name;
         await c.SendAsync(MessageTypes.Login, new LoginPayload { Name = name });
-        await c.WaitAsync(MessageTypes.LoginOk);
+        await c.WaitAsync(MessageTypes.LoginOk, seconds);
         return c;
     }
 
@@ -73,6 +73,7 @@ internal sealed class TestClient : IDisposable
 public sealed class ServerFixture : IDisposable
 {
     public int Port { get; }
+    public string HistoryDir { get; }
     private readonly CancellationTokenSource _cts = new();
 
     public ServerFixture()
@@ -80,8 +81,8 @@ public sealed class ServerFixture : IDisposable
         Logger.Quiet = true;
         var l = new TcpListener(IPAddress.Loopback, 0); l.Start();
         Port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop();
-        var dir = Path.Combine(Path.GetTempPath(), "sudoku-test-" + Guid.NewGuid());
-        var server = new GameServer(new HistoryStore(dir)) { Holes = 30 };
+        HistoryDir = Path.Combine(Path.GetTempPath(), "sudoku-test-" + Guid.NewGuid());
+        var server = new GameServer(new HistoryStore(HistoryDir)) { Holes = 30 };
         _ = Task.Run(() => server.RunAsync(Port, _cts.Token));
     }
 
@@ -90,8 +91,9 @@ public sealed class ServerFixture : IDisposable
 
 public class NetworkTests : IClassFixture<ServerFixture>
 {
+    private readonly ServerFixture _fx;
     private readonly int _port;
-    public NetworkTests(ServerFixture f) => _port = f.Port;
+    public NetworkTests(ServerFixture f) { _fx = f; _port = f.Port; }
 
     private static T Data<T>(ResponseMessage m) => JsonHelper.ReadResponseData<T>(m)!;
 
@@ -115,7 +117,6 @@ public class NetworkTests : IClassFixture<ServerFixture>
         var (a, b, snap) = await StartMatchAsync("alice1", "bob1");
         using (a) using (b)
         {
-            // Người chơi chỉ nhìn thấy bảng của mình
             Assert.NotNull(snap.Players.First(p => p.Name == "alice1").Board);
             Assert.Null(snap.Players.First(p => p.Name == "bob1").Board);
 
@@ -147,7 +148,6 @@ public class NetworkTests : IClassFixture<ServerFixture>
             var err = await s.WaitAsync(MessageTypes.Error);
             Assert.Contains("Khán giả", err.Message);
 
-            // người chơi đi một nước -> khán giả nhận cập nhật
             var sol = SudokuGenerator.Solve(snapA.Puzzle)!;
             int idx = Enumerable.Range(0, 81).First(i => snapA.Puzzle[i / 9][i % 9] == 0);
             await a.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = idx / 9, Col = idx % 9, Value = sol[idx / 9][idx % 9] });
@@ -164,7 +164,7 @@ public class NetworkTests : IClassFixture<ServerFixture>
         await c.WaitAsync(MessageTypes.Error);
         await c.SendAsync("NOT_A_REAL_TYPE");
         await c.WaitAsync(MessageTypes.Error);
-        await c.SendAsync(MessageTypes.SubmitMove, new MovePayload());     // chưa vào trận
+        await c.SendAsync(MessageTypes.SubmitMove, new MovePayload());
         await c.WaitAsync(MessageTypes.Error);
         await c.SendAsync(MessageTypes.Ping);
         await c.WaitAsync(MessageTypes.Pong);
@@ -187,11 +187,11 @@ public class NetworkTests : IClassFixture<ServerFixture>
         var (a, b, _) = await StartMatchAsync("alice5", "bob5");
         using (a)
         {
-            b.Dispose();                                             // bob mất kết nối đột ngột
+            b.Dispose();
             var paused = await a.WaitAsync(MessageTypes.GamePaused);
             Assert.Equal(MatchStates.Paused, Data<TimeUpdateData>(paused).State);
 
-            using var b2 = await TestClient.LoginAsync(_port, "bob5");   // quay lại trong 1 phút
+            using var b2 = await TestClient.LoginAsync(_port, "bob5");
             var back = Data<MatchSnapshot>(await b2.WaitAsync(MessageTypes.BoardUpdate));
             Assert.Equal("bob5", back.You);
             await a.WaitAsync(MessageTypes.GameResumed);
@@ -229,7 +229,173 @@ public class NetworkTests : IClassFixture<ServerFixture>
         }
     }
 
-    /// <summary>Stress test: 20 trận chạy đồng thời (40 client).</summary>
+    [Fact]
+    public async Task SamePuzzle_And_BoardsStayIndependent()
+    {
+        var a = await TestClient.LoginAsync(_port, "sameA");
+        var b = await TestClient.LoginAsync(_port, "sameB");
+        using (a) using (b)
+        {
+            await a.SendAsync(MessageTypes.JoinQueue);
+            await a.WaitAsync(MessageTypes.Waiting);
+            await b.SendAsync(MessageTypes.JoinQueue);
+            await a.WaitAsync(MessageTypes.MatchFound);
+            await b.WaitAsync(MessageTypes.MatchFound);
+            var sa = Data<MatchSnapshot>(await a.WaitAsync(MessageTypes.GameStarted));
+            var sb = Data<MatchSnapshot>(await b.WaitAsync(MessageTypes.GameStarted));
+            Assert.Equal(sa.Puzzle.SelectMany(r => r), sb.Puzzle.SelectMany(r => r));
+
+            var sol = SudokuGenerator.Solve(sa.Puzzle)!;
+            int i = Enumerable.Range(0, 81).First(k => sa.Puzzle[k / 9][k % 9] == 0);
+            await a.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = i / 9, Col = i % 9, Value = sol[i / 9][i % 9] });
+            var mr = Data<MoveResultData>(await a.WaitAsync(MessageTypes.MoveResult));
+            Assert.True(mr.Accepted);
+            Assert.Equal(1, mr.ScoreDelta);
+
+            var upd = Data<MatchSnapshot>(await b.WaitAsync(MessageTypes.BoardUpdate));
+            Assert.Equal(0, upd.Players.First(p => p.Name == "sameB").Score);
+            Assert.Null(upd.Players.First(p => p.Name == "sameA").Board);
+        }
+    }
+
+    [Fact]
+    public async Task BadMove_OutOfRange_GivenCell_And_WrongValue()
+    {
+        var (a, b, snap) = await StartMatchAsync("badA", "badB");
+        using (a) using (b)
+        {
+            int empty = Enumerable.Range(0, 81).First(k => snap.Puzzle[k / 9][k % 9] == 0);
+            await a.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = empty / 9, Col = empty % 9, Value = 10 });
+            var bad = Data<MoveResultData>(await a.WaitAsync(MessageTypes.MoveResult));
+            Assert.False(bad.Accepted);
+            Assert.Equal(0, bad.Score);
+            Assert.Contains("không hợp lệ", bad.Reason);
+
+            int given = Enumerable.Range(0, 81).First(k => snap.Puzzle[k / 9][k % 9] != 0);
+            await a.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = given / 9, Col = given % 9, Value = 1 });
+            var locked = Data<MoveResultData>(await a.WaitAsync(MessageTypes.MoveResult));
+            Assert.False(locked.Accepted);
+            Assert.Equal(0, locked.ScoreDelta);
+            Assert.Contains("không được sửa", locked.Reason);
+
+            var sol = SudokuGenerator.Solve(snap.Puzzle)!;
+            int wrong = sol[empty / 9][empty % 9] % 9 + 1;
+            await a.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = empty / 9, Col = empty % 9, Value = wrong });
+            var miss = Data<MoveResultData>(await a.WaitAsync(MessageTypes.MoveResult));
+            Assert.False(miss.Accepted);
+            Assert.Equal(-1, miss.ScoreDelta);
+            Assert.Equal(-1, miss.Score);
+
+            var board = Data<MatchSnapshot>(await a.WaitAsync(MessageTypes.BoardUpdate));
+            Assert.Equal(0, board.Players.First(p => p.Name == "badA").Board![empty / 9][empty % 9]);
+        }
+    }
+
+    [Fact]
+    public async Task MissingType_IsRejected_MissingPayload_IsNot()
+    {
+        using var c = await TestClient.LoginAsync(_port, "raw8");
+        await c.SendRawAsync("{\"Payload\":\"\"}");
+        var err = await c.WaitAsync(MessageTypes.Error);
+        Assert.Contains("Type", err.Message);
+        await c.SendRawAsync("{\"Type\":\"PING\"}");
+        await c.WaitAsync(MessageTypes.Pong);
+    }
+
+    [Fact]
+    public async Task JoinQueue_Twice_And_DisconnectWhileWaiting()
+    {
+        using var dup = await TestClient.LoginAsync(_port, "dupQ");
+        await dup.SendAsync(MessageTypes.JoinQueue);
+        await dup.WaitAsync(MessageTypes.Waiting);
+        await dup.SendAsync(MessageTypes.JoinQueue);
+        Assert.Contains("rảnh", (await dup.WaitAsync(MessageTypes.Error)).Message);
+        await dup.SendAsync(MessageTypes.LeaveQueue);
+        await dup.WaitAsync(MessageTypes.Ok);
+
+        var gone = await TestClient.LoginAsync(_port, "goneQ");
+        await gone.SendAsync(MessageTypes.JoinQueue);
+        await gone.WaitAsync(MessageTypes.Waiting);
+        gone.Dispose();
+        await Task.Delay(400);
+
+        using var next = await TestClient.LoginAsync(_port, "nextQ");
+        await next.SendAsync(MessageTypes.JoinQueue);
+        var stillWaiting = await next.WaitAsync(MessageTypes.Waiting);
+        Assert.Equal(MessageTypes.Waiting, stillWaiting.Status);
+    }
+
+    [Fact]
+    public async Task TwoMatches_DoNotShareScore()
+    {
+        async Task<(TestClient A, TestClient B, MatchSnapshot S)> Pair(string x, string y)
+        {
+            var a = await TestClient.LoginAsync(_port, x);
+            var b = await TestClient.LoginAsync(_port, y);
+            await a.SendAsync(MessageTypes.Challenge, new ChallengePayload { Target = y });
+            await b.WaitAsync(MessageTypes.ChallengeReceived);
+            await b.SendAsync(MessageTypes.ChallengeResponse, new ChallengeResponsePayload { Challenger = x, Accept = true });
+            var s = Data<MatchSnapshot>(await a.WaitAsync(MessageTypes.GameStarted, 30));
+            await b.WaitAsync(MessageTypes.GameStarted, 30);
+            return (a, b, s);
+        }
+
+        var m1 = await Pair("m1a", "m1b");
+        var m2 = await Pair("m2a", "m2b");
+        using var watcher = await TestClient.LoginAsync(_port, "watch15");
+        using (m1.A) using (m1.B) using (m2.A) using (m2.B)
+        {
+            Assert.NotEqual(m1.S.MatchId, m2.S.MatchId);
+            var sol = SudokuGenerator.Solve(m1.S.Puzzle)!;
+            int i = Enumerable.Range(0, 81).First(k => m1.S.Puzzle[k / 9][k % 9] == 0);
+            await m1.A.SendAsync(MessageTypes.SubmitMove, new MovePayload { Row = i / 9, Col = i % 9, Value = sol[i / 9][i % 9] });
+            Assert.Equal(1, Data<MoveResultData>(await m1.A.WaitAsync(MessageTypes.MoveResult)).Score);
+
+            await watcher.SendAsync(MessageTypes.ListMatches);
+            var list = Data<List<MatchSummary>>(await watcher.WaitAsync(MessageTypes.MatchList));
+            var moved = list.First(x => x.MatchId == m1.S.MatchId);
+            var other = list.First(x => x.MatchId == m2.S.MatchId);
+            Assert.Equal(1, moved.Score1);
+            Assert.Equal(0, moved.Score2);
+            Assert.Equal(0, other.Score1);
+            Assert.Equal(0, other.Score2);
+        }
+    }
+
+    [Fact]
+    public async Task HistoryFile_HasFinishedMatch()
+    {
+        var (a, b, _) = await StartMatchAsync("histA", "histB");
+        using (a) using (b)
+        {
+            await a.SendAsync(MessageTypes.Surrender);
+            var over = Data<GameOverData>(await b.WaitAsync(MessageTypes.GameOver));
+            string path = Path.Combine(_fx.HistoryDir, "match_history.jsonl");
+            var line = File.ReadAllLines(path)
+                .Select(x => JsonHelper.Deserialize<MatchRecord>(x))
+                .FirstOrDefault(r => r != null && r.Player1 == "histA" && r.Player2 == "histB");
+            Assert.NotNull(line);
+            Assert.Equal(over.MatchId, line.MatchId);
+            Assert.Equal("histB", line.Winner);
+        }
+    }
+
+    [Fact]
+    public async Task AfterGameOver_Disconnect_OtherClientStillServed()
+    {
+        var (a, b, _) = await StartMatchAsync("endA", "endB");
+        using (b)
+        {
+            await a.SendAsync(MessageTypes.Surrender);
+            await a.WaitAsync(MessageTypes.GameOver);
+            await b.WaitAsync(MessageTypes.GameOver);
+            a.Dispose();
+            await Task.Delay(200);
+            await b.SendAsync(MessageTypes.Ping);
+            await b.WaitAsync(MessageTypes.Pong);
+        }
+    }
+
     [Fact]
     public async Task Stress_TwentyConcurrentMatches()
     {
