@@ -1,119 +1,74 @@
-using System;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
+using SudokuShared;
+using SudokuShared.Messages;
 
-namespace SudokuServer
+namespace SudokuServer;
+
+public enum SessionState { Connected, Idle, InQueue, Playing, Spectating }
+
+public sealed class ClientSession
 {
-    public class ClientSession
+    public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(5);
+
+    private readonly TcpClient _tcp;
+    private readonly StreamReader _reader;
+    private readonly StreamWriter _writer;
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private volatile bool _closed;
+
+    public string Endpoint { get; }
+    public string? Name { get; set; }
+    public SessionState State { get; set; } = SessionState.Connected;
+    public GameMatch? Match { get; set; }
+    public bool IsClosed => _closed;
+
+    public ClientSession(TcpClient tcp)
     {
-        public TcpClient TcpClient { get; }
-        public NetworkStream Stream { get; } 
-        private byte[] _buffer = new byte[2048];
-        private StringBuilder _stringBuilder = new StringBuilder();
-        private GameServer _server;
+        _tcp = tcp;
+        _tcp.NoDelay = true;
+        Endpoint = tcp.Client.RemoteEndPoint?.ToString() ?? "?";
+        var stream = tcp.GetStream();
+        var utf8 = new UTF8Encoding(false);
+        _reader = new StreamReader(stream, utf8);
+        _writer = new StreamWriter(stream, utf8) { AutoFlush = false };
+    }
 
-        public ClientSession(TcpClient tcpClient, GameServer server)
-        {
-            TcpClient = tcpClient;
-            Stream = tcpClient.GetStream();
-            _server = server;
-        }
+    /// <summary>Đọc một dòng JSON. Ném OperationCanceledException nếu quá thời gian chờ.</summary>
+    public async Task<string?> ReadLineAsync()
+    {
+        using var cts = new CancellationTokenSource(IdleTimeout);
+        return await _reader.ReadLineAsync(cts.Token);
+    }
 
-        public void StartReceiving()
+    public async Task<bool> SendAsync(ResponseMessage msg)
+    {
+        if (_closed) return false;
+        var line = JsonHelper.Serialize(msg) + "\n";
+        try
         {
+            await _sendLock.WaitAsync();
             try
             {
-                Stream.BeginRead(_buffer, 0, _buffer.Length, OnReadComplete, null);
+                using var cts = new CancellationTokenSource(SendTimeout);
+                await _writer.WriteAsync(line.AsMemory(), cts.Token);
+                await _writer.FlushAsync(cts.Token);
+                return true;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Lỗi khởi động đọc dữ liệu]: {ex.Message}");
-                Disconnect();
-            }
+            finally { _sendLock.Release(); }
         }
-
-        private void OnReadComplete(IAsyncResult ar)
+        catch
         {
-            try
-            {
-                int bytesRead = Stream.EndRead(ar);
-                if (bytesRead <= 0)
-                {
-                    Disconnect();
-                    return;
-                }
-
-                // Chuyển dữ liệu nhận được thành chuỗi và đưa vào StringBuilder
-                string receivedText = Encoding.UTF8.GetString(_buffer, 0, bytesRead);
-                _stringBuilder.Append(receivedText);
-
-                // Xử lý Message Framing dựa trên ký tự xuống dòng '\n'
-                string accumulated = _stringBuilder.ToString();
-                int newlineIndex;
-                while ((newlineIndex = accumulated.IndexOf('\n')) >= 0)
-                {
-                    string jsonMessage = accumulated.Substring(0, newlineIndex).Trim();
-                    accumulated = accumulated.Substring(newlineIndex + 1);
-                    _stringBuilder.Clear();
-                    _stringBuilder.Append(accumulated);
-
-                    if (!string.IsNullOrEmpty(jsonMessage))
-                    {
-                        ProcessMessage(jsonMessage);
-                    }
-                }
-
-                // Tiếp tục lắng nghe dữ liệu tiếp theo từ Client này
-                Stream.BeginRead(_buffer, 0, _buffer.Length, OnReadComplete, null);
-            }
-            catch (Exception)
-            {
-                Disconnect();
-            }
+            Close();
+            return false;
         }
+    }
 
-        private void ProcessMessage(string jsonMessage)
-        {
-            try
-            {
-                var request = JsonSerializer.Deserialize<RequestMessage>(jsonMessage);
-                if (request != null)
-                {
-                    _server.HandleClientRequest(this, request);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Lỗi phân tích JSON]: {ex.Message}");
-            }
-        }
-
-        public void SendMessage(ResponseMessage response)
-        {
-            try
-            {
-                string json = JsonSerializer.Serialize(response) + "\n"; // Đảm bảo có \n ở cuối
-                byte[] data = Encoding.UTF8.GetBytes(json);
-                Stream.Write(data, 0, data.Length);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Lỗi gửi tin tới Client]: {ex.Message}");
-                Disconnect();
-            }
-        }
-
-        public void Disconnect()
-        {
-            try
-            {
-                Stream?.Close();
-                TcpClient?.Close();
-                _server.RemoveClient(this);
-                Console.WriteLine("[Thông báo] Một Client đã ngắt kết nối và được giải phóng tài nguyên.");
-            }
-            catch { }
-        }
+    public void Close()
+    {
+        if (_closed) return;
+        _closed = true;
+        try { _tcp.Close(); } catch { }
     }
 }

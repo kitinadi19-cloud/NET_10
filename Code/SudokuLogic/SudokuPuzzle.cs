@@ -13,4 +13,7 @@ public sealed class SudokuPuzzle
         Solution = solution;
         EmptyCount = puzzle.Sum(r => r.Count(v => v == 0));
     }
+ feature/tv3-sudoku-logic
 }
+}
+ main
